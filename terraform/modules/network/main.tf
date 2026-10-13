@@ -1,7 +1,6 @@
-data "aws_availability_zones" "available" { state = "available" }
-
+# AZs are pinned explicitly (CKV_AWS_394) so the subnet layout never shifts when AWS adds a zone.
 locals {
-  azs = slice(data.aws_availability_zones.available.names, 0, var.az_count)
+  azs = var.azs
 }
 
 module "vpc" {
@@ -15,10 +14,10 @@ module "vpc" {
   private_subnets = [for i, _ in local.azs : cidrsubnet(var.cidr, 4, i)]
   public_subnets  = [for i, _ in local.azs : cidrsubnet(var.cidr, 8, 48 + i)]
 
-  enable_nat_gateway     = true
-  single_nat_gateway     = var.single_nat_gateway
-  enable_dns_hostnames   = true
-  enable_flow_log        = true
+  enable_nat_gateway                   = true
+  single_nat_gateway                   = var.single_nat_gateway
+  enable_dns_hostnames                 = true
+  enable_flow_log                      = true
   create_flow_log_cloudwatch_log_group = true
   create_flow_log_cloudwatch_iam_role  = true
 

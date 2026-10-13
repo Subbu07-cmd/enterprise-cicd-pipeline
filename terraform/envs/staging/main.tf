@@ -56,6 +56,5 @@ module "rds" {
   subnet_ids                 = module.network.private_subnet_ids
   allowed_security_group_ids = [module.eks.node_security_group_id]
   multi_az                   = var.multi_az
-  deletion_protection        = var.deletion_protection
   tags                       = local.tags
 }

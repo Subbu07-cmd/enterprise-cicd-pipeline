@@ -37,6 +37,22 @@ A production-style delivery pipeline for a containerized service on AWS. It show
 - **DRY infrastructure**: environments differ only in their variable values
 - **Auditable**: every change goes through a PR plan, an approval and an apply
 
+## Issues I hit
+
+The first CI run failed the **Checkov** gate on the RDS and network modules. That's the gate doing its job. Fixes:
+
+| Check | Finding | Fix |
+|------|---------|-----|
+| CKV2_AWS_30 | No Postgres query logging | Custom parameter group with `log_statement = ddl` and `log_min_duration_statement = 1000` (plus `rds.force_ssl = 1`) |
+| CKV_AWS_118 | No enhanced monitoring | `monitoring_interval = 60` with a dedicated monitoring IAM role |
+| CKV_AWS_354 | Performance Insights not on a CMK | Module-owned KMS key (rotation on) for storage and Performance Insights |
+| CKV_AWS_293 | Deletion protection off in dev | Always on; turned off deliberately only for a planned teardown |
+| CKV_AWS_23 | Security group missing a description | Added |
+| CKV_AWS_394 | AZ data source can silently expand | AZs pinned via an `azs` variable |
+| CKV_AWS_157 | Multi-AZ off in dev/staging | **Accepted risk**: documented `checkov:skip` because prod is Multi-AZ and lower environments stay single-AZ for cost |
+
+Other CI fixes: pytest needed `pythonpath = ["."]` to import the app, the Trivy step now runs the pinned `aquasec/trivy` image, and the deploy workflow skips cleanly until AWS variables are configured.
+
 ## Run locally
 
 ```bash
