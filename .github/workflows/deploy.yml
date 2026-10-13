@@ -14,6 +14,8 @@ env:
 
 jobs:
   build:
+    # Skips cleanly until AWS_ACCOUNT_ID / AWS_REGION repository variables are configured.
+    if: vars.AWS_ACCOUNT_ID != ''
     runs-on: ubuntu-latest
     environment: dev
     outputs:
