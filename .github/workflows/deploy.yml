@@ -1,0 +1,57 @@
+name: Deploy
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  id-token: write   # GitHub OIDC -> AWS
+  contents: read
+
+env:
+  AWS_REGION: ${{ vars.AWS_REGION }}
+  ECR_REPO: sample-service
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    environment: dev
+    outputs:
+      image: ${{ steps.push.outputs.image }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ vars.AWS_ACCOUNT_ID }}:role/github-deploy-dev
+          aws-region: ${{ env.AWS_REGION }}
+      - id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+      - id: push
+        run: |
+          IMAGE=${{ steps.ecr.outputs.registry }}/$ECR_REPO:${{ github.sha }}
+          docker build --build-arg APP_VERSION=${{ github.sha }} -t $IMAGE .
+          docker push $IMAGE
+          echo "image=$IMAGE" >> "$GITHUB_OUTPUT"
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    strategy:
+      max-parallel: 1
+      matrix:
+        env: [dev, staging, prod]
+    environment: ${{ matrix.env }}   # prod has required reviewers
+    steps:
+      - uses: actions/checkout@v4
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ vars.AWS_ACCOUNT_ID }}:role/github-deploy-${{ matrix.env }}
+          aws-region: ${{ env.AWS_REGION }}
+      - run: aws eks update-kubeconfig --name platform-${{ matrix.env }}
+      - name: Deploy
+        run: |
+          sed "s|IMAGE_PLACEHOLDER|${{ needs.build.outputs.image }}|" k8s/deployment.yaml | kubectl apply -n app -f -
+          kubectl apply -n app -f k8s/service.yaml
+          kubectl rollout status deploy/sample-service -n app --timeout=180s
+      - name: Smoke test
+        run: kubectl run smoke-${{ github.run_id }} -n app --rm -i --restart=Never --image=curlimages/curl -- curl -fsS http://sample-service/health
